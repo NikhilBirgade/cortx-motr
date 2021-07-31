@@ -7153,19 +7153,21 @@ static void btree_ut_kv_oper_thread_handler(struct btree_ut_thread_info *ti)
 		 * Test for MIN and MAX keys. 
 		 * Testing is difficult since multiple threads will be adding
 		 * or deleting keys from the btree at any time. To get around 
-		 * this we need to first quiesce all the threads and then work
-		 * with the current btree to find out the MIN and the MAX 
-		 * values. To confirm if the values are MIN and MAX we will try
-		 * to iterate the PREV and NEXT values for both MIN key and
-		 * MAX key. In case of MIN key the PREV iterator should FAIL
-		 * but NEXT iterator should succeed. Conversely for MAX key the
-		 * PREV iterator should succeed while the PREV iterator should
-		 * fail.
+		 * this we first quiesce all the threads and then work with
+		 * the current btree to find out the MIN and the MAX values.
+		 * To confirm if the values are MIN and MAX we will iterate
+		 * the PREV and NEXT values for both MIN key and MAX key.
+		 * In case of MIN key the PREV iterator should FAIL but NEXT
+		 * iterator should succeed. Conversely for MAX key the PREV
+		 * iterator should succeed while the NEXT iterator should fail.
 		 */
 		UT_REQUEST_PEER_THREADS_TO_QUIESCE();
 
-		random_r(&ti->ti_random_buf, &r);
-		get_key[0] = r;
+		/** 
+		 * Fill a value in the buffer which we know cannot be the
+		 * MIN key
+		 */
+		get_key[0] = key_last + 1;
 
 		M0_BTREE_OP_SYNC_WITH_RC(&kv_op,
 					 m0_btree_minkey(tree, &ut_get_cb, 0,
@@ -7179,15 +7181,17 @@ static void btree_ut_kv_oper_thread_handler(struct btree_ut_thread_info *ti)
 					 m0_btree_iter(tree, &rec.r_key,
 						       &ut_get_cb, BOF_NEXT,
 						       &kv_op));
-		if (get_data.flags == M0_BSC_KEY_BTREE_BOUNDARY)
-			/** 
-			 * This is rare but can happen if only one Key is
-			 * present in the btree. We do not ASSERT but log this
-			 * condition.
-			 */
-			M0_LOG(M0_WARN, "Did not find any key after MIN key.");
-		else
-			M0_ASSERT(get_data.flags == M0_BSC_SUCCESS);
+		M0_ASSERT((get_data.flags == M0_BSC_SUCCESS) ||
+			  (get_data.flags == M0_BSC_KEY_BTREE_BOUNDARY &&
+			   key_iter_start == key_last));
+		/** 
+		 * The second condition in the above assert is rare but can
+		 * happen if only one Key is present in the btree. We presume
+		 * that no Keys from other other threads are currently present
+		 * in the btree and also the current thread  added just one
+		 * key in this iteration.
+		 */
+
 		for (i = 0; i < ARRAY_SIZE(key); i += sizeof(key[0]))
 			get_key[i] = key[i];
 
@@ -7197,7 +7201,7 @@ static void btree_ut_kv_oper_thread_handler(struct btree_ut_thread_info *ti)
 						       &kv_op));
 		M0_ASSERT(get_data.flags == M0_BSC_KEY_BTREE_BOUNDARY);
 
-		get_key[0] = r;
+		get_key[0] = key_iter_start - 1;
 
 		M0_BTREE_OP_SYNC_WITH_RC(&kv_op,
 					 m0_btree_maxkey(tree, &ut_get_cb, 0,
@@ -7211,15 +7215,10 @@ static void btree_ut_kv_oper_thread_handler(struct btree_ut_thread_info *ti)
 					 m0_btree_iter(tree, &rec.r_key,
 						       &ut_get_cb, BOF_PREV,
 						       &kv_op));
-		if (get_data.flags == M0_BSC_KEY_BTREE_BOUNDARY)
-			/** 
-			 * This is rare but can happen if only one Key is
-			 * present in the btree. We do not ASSERT but log this
-			 * condition.
-			 */
-			M0_LOG(M0_WARN, "Did not find any key after MAX key.");
-		else
-			M0_ASSERT(get_data.flags == M0_BSC_SUCCESS);
+		M0_ASSERT((get_data.flags == M0_BSC_SUCCESS) ||
+			  (get_data.flags == M0_BSC_KEY_BTREE_BOUNDARY &&
+			   key_iter_start == key_last));
+
 		for (i = 0; i < ARRAY_SIZE(key); i += sizeof(key[0]))
 			get_key[i] = key[i];
 
