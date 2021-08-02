@@ -6903,7 +6903,7 @@ static struct m0_atomic64 threads_running;
 
 #define UT_THREAD_WAIT()                                                      \
 	do {                                                                  \
-		while(!thread_run)                                            \
+		while (!thread_run)                                            \
 			;                                                     \
 	} while (0)
 
@@ -6922,7 +6922,7 @@ static struct m0_atomic64 threads_running;
 		do {                                                          \
 			try_again = false;                                    \
 			if (m0_atomic64_cas(&thread_run, true, false)) {      \
-				while(m0_atomic64_get(&threads_quiesced) <    \
+				while (m0_atomic64_get(&threads_quiesced) <    \
 				      m0_atomic64_get(&threads_running) - 1)  \
 					;                                     \
 			} else {                                              \
